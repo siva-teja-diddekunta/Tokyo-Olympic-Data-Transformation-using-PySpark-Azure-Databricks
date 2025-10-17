@@ -1,227 +1,147 @@
-# Retail Sales Analysis SQL Project
+# Tokyo Olympic Data Transformation using PySpark & Azure Databricks
 
 ## Project Overview
 
-**Project Title**: Retail Sales Analysis  
-**Level**: Beginner  
-**Database**: `p1_retail_db`
+**Project Title**: Tokyo Olympic Data
+**Level**: Beginner
 
-This project is designed to demonstrate SQL skills and techniques typically used by data analysts to explore, clean, and analyze retail sales data. The project involves setting up a retail sales database, performing exploratory data analysis (EDA), and answering specific business questions through SQL queries. This project is ideal for those who are starting their journey in data analysis and want to build a solid foundation in SQL.
 
-## Objectives
+This project demonstrates how to perform data ingestion, transformation, and analysis on the Tokyo Olympic dataset using Azure Databricks and PySpark.
+It covers the full pipeline — from mounting Azure Data Lake Storage (ADLS) to reading raw CSVs, inspecting schemas, cleaning data, transforming it, and writing the processed data back to ADLS.
 
-1. **Set up a retail sales database**: Create and populate a retail sales database with the provided sales data.
-2. **Data Cleaning**: Identify and remove any records with missing or null values.
-3. **Exploratory Data Analysis (EDA)**: Perform basic exploratory data analysis to understand the dataset.
-4. **Business Analysis**: Use SQL to answer specific business questions and derive insights from the sales data.
+## Project Workflow
+1.**Mount Azure Data Lake Storage (ADLS)**
 
-## Project Structure
+Configured OAuth authentication to securely connect Databricks with Azure Data Lake.
 
-### 1. Database Setup
+Mounted the container tokyo-olympic-data into Databricks at /mnt/tokyoolymic.
 
-- **Database Creation**: The project starts by creating a database named `p1_retail_db`.
-- **Table Creation**: A table named `retail_sales` is created to store the sales data. The table structure includes columns for transaction ID, sale date, sale time, customer ID, gender, age, product category, quantity sold, price per unit, cost of goods sold (COGS), and total sale amount.
+Verified the mount and checked directories:
+```
+Python
+%fs
+ls "/mnt/tokyoolymic"
+```
+__
+2. Read Data from ADLS
 
-```sql
-CREATE DATABASE p1_retail_db;
-
-CREATE TABLE retail_sales
-(
-    transactions_id INT PRIMARY KEY,
-    sale_date DATE,	
-    sale_time TIME,
-    customer_id INT,	
-    gender VARCHAR(10),
-    age INT,
-    category VARCHAR(35),
-    quantity INT,
-    price_per_unit FLOAT,	
-    cogs FLOAT,
-    total_sale FLOAT
-);
+Loaded multiple CSV datasets from the /raw-data/ folder using PySpark:
+```python
+athletes = spark.read.format("csv").option("header","true").option("inferSchema","true").load("/mnt/tokyoolymic/raw-data/athletes.csv")
+coaches = spark.read.format("csv").option("header","true").option("inferSchema","true").load("/mnt/tokyoolymic/raw-data/coaches.csv")
+entriesgender = spark.read.format("csv").option("header","true").option("inferSchema","true").load("/mnt/tokyoolymic/raw-data/entriesgender.csv")
+medals = spark.read.format("csv").option("header","true").option("inferSchema","true").load("/mnt/tokyoolymic/raw-data/medals.csv")
+teams = spark.read.format("csv").option("header","true").option("inferSchema","true").load("/mnt/tokyoolymic/raw-data/teams.csv")
 ```
 
-### 2. Data Exploration & Cleaning
+## Datasets Included
 
-- **Record Count**: Determine the total number of records in the dataset.
-- **Customer Count**: Find out how many unique customers are in the dataset.
-- **Category Count**: Identify all unique product categories in the dataset.
-- **Null Value Check**: Check for any null values in the dataset and delete records with missing data.
+Athletes – Competitor details (name, country, discipline)
 
-```sql
-SELECT COUNT(*) FROM retail_sales;
-SELECT COUNT(DISTINCT customer_id) FROM retail_sales;
-SELECT DISTINCT category FROM retail_sales;
+Coaches – Coach information with associated events
 
-SELECT * FROM retail_sales
-WHERE 
-    sale_date IS NULL OR sale_time IS NULL OR customer_id IS NULL OR 
-    gender IS NULL OR age IS NULL OR category IS NULL OR 
-    quantity IS NULL OR price_per_unit IS NULL OR cogs IS NULL;
+EntriesGender – Gender participation across disciplines
 
-DELETE FROM retail_sales
-WHERE 
-    sale_date IS NULL OR sale_time IS NULL OR customer_id IS NULL OR 
-    gender IS NULL OR age IS NULL OR category IS NULL OR 
-    quantity IS NULL OR price_per_unit IS NULL OR cogs IS NULL;
+Medals – Medal counts and rankings by country
+
+Teams – Team participation by event and country
+
+**3. Data Exploration**
+
+Displayed top records using .show()
+
+Inspected schema using .printSchema()
+
+Verified column datatypes and structures
+
+Example:
+```Python
+athletes.printSchema()
+entriesgender.printSchema()
 ```
+**4. Data Cleaning & Type Casting**
 
-### 3. Data Analysis & Findings
-
-The following SQL queries were developed to answer specific business questions:
-
-1. **Write a SQL query to retrieve all columns for sales made on '2022-11-05**:
-```sql
-SELECT *
-FROM retail_sales
-WHERE sale_date = '2022-11-05';
+Converted gender columns to numeric datatypes for analysis:
+```python
+entriesgender = entriesgender.withColumn("Female", col("Female").cast(IntegerType())) \
+                             .withColumn("Male", col("Male").cast(IntegerType())) \
+                             .withColumn("Total", col("Total").cast(IntegerType()))
 ```
+**5. Transformations & Analysis**
 
-2. **Write a SQL query to retrieve all transactions where the category is 'Clothing' and the quantity sold is more than 4 in the month of Nov-2022**:
-```sql
-SELECT 
-  *
-FROM retail_sales
-WHERE 
-    category = 'Clothing'
-    AND 
-    TO_CHAR(sale_date, 'YYYY-MM') = '2022-11'
-    AND
-    quantity >= 4
+**Top Gold Medal Countries**
+```python
+medals.orderBy("Gold", ascending=False).select("Team_Country","Gold").show()
 ```
-
-3. **Write a SQL query to calculate the total sales (total_sale) for each category.**:
-```sql
-SELECT 
-    category,
-    SUM(total_sale) as net_sale,
-    COUNT(*) as total_orders
-FROM retail_sales
-GROUP BY 1
-```
-
-4. **Write a SQL query to find the average age of customers who purchased items from the 'Beauty' category.**:
-```sql
-SELECT
-    ROUND(AVG(age), 2) as avg_age
-FROM retail_sales
-WHERE category = 'Beauty'
-```
-
-5. **Write a SQL query to find all transactions where the total_sale is greater than 1000.**:
-```sql
-SELECT * FROM retail_sales
-WHERE total_sale > 1000
-```
-
-6. **Write a SQL query to find the total number of transactions (transaction_id) made by each gender in each category.**:
-```sql
-SELECT 
-    category,
-    gender,
-    COUNT(*) as total_trans
-FROM retail_sales
-GROUP 
-    BY 
-    category,
-    gender
-ORDER BY 1
-```
-
-7. **Write a SQL query to calculate the average sale for each month. Find out best selling month in each year**:
-```sql
-SELECT 
-       year,
-       month,
-    avg_sale
-FROM 
-(    
-SELECT 
-    EXTRACT(YEAR FROM sale_date) as year,
-    EXTRACT(MONTH FROM sale_date) as month,
-    AVG(total_sale) as avg_sale,
-    RANK() OVER(PARTITION BY EXTRACT(YEAR FROM sale_date) ORDER BY AVG(total_sale) DESC) as rank
-FROM retail_sales
-GROUP BY 1, 2
-) as t1
-WHERE rank = 1
-```
-
-8. **Write a SQL query to find the top 5 customers based on the highest total sales **:
-```sql
-SELECT 
-    customer_id,
-    SUM(total_sale) as total_sales
-FROM retail_sales
-GROUP BY 1
-ORDER BY 2 DESC
-LIMIT 5
-```
-
-9. **Write a SQL query to find the number of unique customers who purchased items from each category.**:
-```sql
-SELECT 
-    category,    
-    COUNT(DISTINCT customer_id) as cnt_unique_cs
-FROM retail_sales
-GROUP BY category
-```
-
-10. **Write a SQL query to create each shift and number of orders (Example Morning <12, Afternoon Between 12 & 17, Evening >17)**:
-```sql
-WITH hourly_sale
-AS
-(
-SELECT *,
-    CASE
-        WHEN EXTRACT(HOUR FROM sale_time) < 12 THEN 'Morning'
-        WHEN EXTRACT(HOUR FROM sale_time) BETWEEN 12 AND 17 THEN 'Afternoon'
-        ELSE 'Evening'
-    END as shift
-FROM retail_sales
+**Average Entries by Gender**
+```python
+average_entries_by_gender = entriesgender.withColumn(
+    'Avg_Female', entriesgender['Female'] / entriesgender['Total']
+).withColumn(
+    'Avg_Male', entriesgender['Male'] / entriesgender['Total']
 )
-SELECT 
-    shift,
-    COUNT(*) as total_orders    
-FROM hourly_sale
-GROUP BY shift
+average_entries_by_gender.show()
 ```
 
-## Findings
+**6. Write Transformed Data Back to ADLS**
 
-- **Customer Demographics**: The dataset includes customers from various age groups, with sales distributed across different categories such as Clothing and Beauty.
-- **High-Value Transactions**: Several transactions had a total sale amount greater than 1000, indicating premium purchases.
-- **Sales Trends**: Monthly analysis shows variations in sales, helping identify peak seasons.
-- **Customer Insights**: The analysis identifies the top-spending customers and the most popular product categories.
+Saved processed datasets into the /transformed-data/ folder:
+```python
+athletes.repartition(1).write.mode("overwrite").option("header","true").csv("/mnt/tokyoolymic/transformed-data/athletes")
+coaches.repartition(1).write.mode("overwrite").option("header","true").csv("/mnt/tokyoolymic/transformed-data/coaches")
+entriesgender.repartition(1).write.mode("overwrite").option("header","true").csv("/mnt/tokyoolymic/transformed-data/entriesgender")
+medals.repartition(1).write.mode("overwrite").option("header","true").csv("/mnt/tokyoolymic/transformed-data/medals")
+teams.repartition(1).write.mode("overwrite").option("header","true").csv("/mnt/tokyoolymic/transformed-data/teams")
+```
+**Tech Stack**
+Component	                                 Purpose
+Azure Databricks	               Big data processing & transformation
+Azure Data Lake (Gen2)	           Cloud storage for raw and processed data
+PySpark	                           Distributed data transformation framework
+OAuth (Service Principal)	       Secure authentication for ADLS access
 
-## Reports
+## Key Learnings
 
-- **Sales Summary**: A detailed report summarizing total sales, customer demographics, and category performance.
-- **Trend Analysis**: Insights into sales trends across different months and shifts.
-- **Customer Insights**: Reports on top customers and unique customer counts per category.
+Setting up secure ADLS mounts using OAuth and Databricks secrets
 
-## Conclusion
+Reading, cleaning, and writing large CSV files with Spark DataFrames
 
-This project serves as a comprehensive introduction to SQL for data analysts, covering database setup, data cleaning, exploratory data analysis, and business-driven SQL queries. The findings from this project can help drive business decisions by understanding sales patterns, customer behavior, and product performance.
+Performing schema inspection, type casting, and data validation
 
-## How to Use
+Using PySpark transformations like withColumn, select, and orderBy
 
-1. **Clone the Repository**: Clone this project repository from GitHub.
-2. **Set Up the Database**: Run the SQL scripts provided in the `database_setup.sql` file to create and populate the database.
-3. **Run the Queries**: Use the SQL queries provided in the `analysis_queries.sql` file to perform your analysis.
-4. **Explore and Modify**: Feel free to modify the queries to explore different aspects of the dataset or answer additional business questions.
+Writing cleaned datasets efficiently back to ADLS
 
-## Author - Zero Analyst
+## Folder Structure
 
-This project is part of my portfolio, showcasing the SQL skills essential for data analyst roles. If you have any questions, feedback, or would like to collaborate, feel free to get in touch!
+**Tokyo-Olympic-Transformation/**
+│
+├── raw-data/
+│   ├── athletes.csv
+│   ├── coaches.csv
+│   ├── entriesgender.csv
+│   ├── medals.csv
+│   └── teams.csv
+│
+├── transformed-data/
+│   ├── athletes/
+│   ├── coaches/
+│   ├── entriesgender/
+│   ├── medals/
+│   └── teams/
+│
+└── Tokyo_Olympic_Transformation.dbc
 
-### Stay Updated and Join the Community
+## Future Enhancements
 
-For more content on SQL, data analysis, and other data-related topics, make sure to follow me on social media and join our community:
+Automate transformation pipeline using Databricks Jobs or Azure Data Factory
 
-- **YouTube**: [Subscribe to my channel for tutorials and insights](https://www.youtube.com/@zero_analyst)
-- **Instagram**: [Follow me for daily tips and updates](https://www.instagram.com/zero_analyst/)
-- **LinkedIn**: [Connect with me professionally](https://www.linkedin.com/in/najirr)
-- **Discord**: [Join our community to learn and grow together](https://discord.gg/36h5f2Z5PK)
+Add data validation with Great Expectations
 
-Thank you for your support, and I look forward to connecting with you!
+Build Power BI / Tableau dashboards for medal and participation insights
+
+## Author - Sivateja Diddekunta
+Data & Analytics Engineer
+Turning distributed data into actionable insights across AWS, Azure, and GCP
+Skilled in SQL, Python, Spark, Databricks, Snowflake, dbt, and Airflow
+Passionate about building scalable, reliable data architectures that bridge engineering and business
